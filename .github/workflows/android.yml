@@ -14,41 +14,71 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.5'
-          channel: 'stable'
+          channel: stable
           cache: true
 
       - name: Unzip Liyona source
         run: |
+          rm -rf liyona-source buildapp
           unzip -o liyona-flutter-source.zip -d liyona-source
-          ls -la liyona-source
+          SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
+          echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
+          echo "Source project: $SOURCE_DIR"
 
-      - name: Find Flutter project
+      - name: Create fresh Flutter Android project
         run: |
-          find liyona-source -name pubspec.yaml -print
+          flutter create --platforms=android --org com.liyona --project-name shop buildapp
+
+      - name: Copy Liyona app files
+        run: |
+          rm -rf buildapp/lib buildapp/assets
+          cp -R "$SOURCE_DIR/lib" buildapp/lib
+          cp -R "$SOURCE_DIR/assets" buildapp/assets
+          cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
+
+      - name: Set Android app name
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("buildapp/android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          s = s.replace('android:label="shop"', 'android:label="Liyona"')
+          p.write_text(s)
+          PY
 
       - name: Install dependencies
-        run: |
-          PROJECT_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
-          cd "$PROJECT_DIR"
-          flutter pub get
+        working-directory: buildapp
+        run: flutter pub get
 
-      - name: Build APK
-        run: |
-          PROJECT_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
-          cd "$PROJECT_DIR"
-          flutter build apk --release
+      - name: Generate launcher icon
+        working-directory: buildapp
+        run: dart run flutter_launcher_icons
+
+      - name: Generate splash screen
+        working-directory: buildapp
+        run: dart run flutter_native_splash:create
+
+      - name: Build release APK
+        working-directory: buildapp
+        run: flutter build apk --release
 
       - name: Prepare APK
         run: |
-          PROJECT_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
-          cp "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk" Liyona-Shop.apk
+          cp buildapp/build/app/outputs/flutter-apk/app-release.apk Liyona-Shop.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Liyona-Shop-APK
           path: Liyona-Shop.apk
+          if-no-files-found: error
