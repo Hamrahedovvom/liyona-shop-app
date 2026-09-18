@@ -30,16 +30,12 @@ jobs:
       - name: Unzip Liyona source
         run: |
           rm -rf liyona-source buildapp
-
           unzip -o liyona-flutter-source-v1.1.zip -d liyona-source
 
           SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
-
           echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
 
-          echo "Source project: $SOURCE_DIR"
-
-      - name: Create fresh Flutter Android project
+      - name: Create Android project
         run: |
           flutter create \
             --platforms=android \
@@ -47,7 +43,7 @@ jobs:
             --project-name shop \
             buildapp
 
-      - name: Copy Liyona app files
+      - name: Copy Liyona source
         run: |
           rm -rf buildapp/lib
           rm -rf buildapp/assets
@@ -57,7 +53,7 @@ jobs:
           cp -R "$SOURCE_DIR/assets" buildapp/assets
           cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
 
-      - name: Fix home screen syntax
+      - name: Fix source syntax
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -65,20 +61,12 @@ jobs:
           p = Path("buildapp/lib/screens/home_screen.dart")
 
           if p.exists():
-              lines = p.read_text(
-                  encoding="utf-8"
-              ).splitlines()
-
+              lines = p.read_text(encoding="utf-8").splitlines()
               fixed = []
 
               for line in lines:
                   if line.strip() == ")));":
-                      fixed.append(
-                          line.replace(
-                              ")));",
-                              "));"
-                          )
-                      )
+                      fixed.append(line.replace(")));", "));"))
                   else:
                       fixed.append(line)
 
@@ -86,11 +74,9 @@ jobs:
                   "\n".join(fixed) + "\n",
                   encoding="utf-8"
               )
-
-              print("home_screen.dart checked")
           PY
 
-      - name: Set Android app name
+      - name: Configure Android
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -99,10 +85,25 @@ jobs:
               "buildapp/android/app/src/main/AndroidManifest.xml"
           )
 
-          s = p.read_text(
-              encoding="utf-8"
-          )
+          s = p.read_text(encoding="utf-8")
 
+          # اینترنت برای نسخه Release
+          if "android.permission.INTERNET" not in s:
+              s = s.replace(
+                  "<manifest",
+                  '<manifest'
+              )
+
+              pos = s.find(">")
+
+              s = (
+                  s[:pos + 1]
+                  + '\n    <uses-permission android:name="android.permission.INTERNET"/>'
+                  + '\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>'
+                  + s[pos + 1:]
+              )
+
+          # نام برنامه
           s = s.replace(
               'android:label="shop"',
               'android:label="Liyona"'
@@ -112,37 +113,36 @@ jobs:
               s,
               encoding="utf-8"
           )
+
+          print(s)
           PY
 
       - name: Install dependencies
         working-directory: buildapp
-        run: |
-          flutter pub get
+        run: flutter pub get
 
-      - name: Generate launcher icon
+      - name: Generate app icon
         working-directory: buildapp
-        run: |
-          dart run flutter_launcher_icons
+        run: dart run flutter_launcher_icons
 
-      - name: Generate splash screen
+      - name: Generate splash
         working-directory: buildapp
-        run: |
-          dart run flutter_native_splash:create
+        run: dart run flutter_native_splash:create
 
-      - name: Build release APK
+      - name: Build APK
         working-directory: buildapp
-        run: |
-          flutter build apk --release
+        run: flutter build apk --release
 
       - name: Prepare APK
         run: |
           cp \
             buildapp/build/app/outputs/flutter-apk/app-release.apk \
-            Liyona-Shop-v1.1.apk
+            Liyona-Shop-v1.2.apk
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-Shop-v1.1-APK
-          path: Liyona-Shop-v1.1.apk
+          name: Liyona-Shop-v1.2-APK
+          path: Liyona-Shop-v1.2.apk
           if-no-files-found: error
+          
