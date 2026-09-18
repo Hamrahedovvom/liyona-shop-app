@@ -30,9 +30,13 @@ jobs:
       - name: Unzip Liyona source
         run: |
           rm -rf liyona-source buildapp
-          unzip -o liyona-flutter-source.zip -d liyona-source
+
+          unzip -o liyona-flutter-source-v1.1.zip -d liyona-source
+
           SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
+
           echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
+
           echo "Source project: $SOURCE_DIR"
 
       - name: Create fresh Flutter Android project
@@ -45,11 +49,13 @@ jobs:
 
       - name: Copy Liyona app files
         run: |
-          rm -rf buildapp/lib buildapp/assets
+          rm -rf buildapp/lib
+          rm -rf buildapp/assets
+          rm -rf buildapp/test
+
           cp -R "$SOURCE_DIR/lib" buildapp/lib
           cp -R "$SOURCE_DIR/assets" buildapp/assets
           cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
-          rm -rf buildapp/test
 
       - name: Fix home screen syntax
         run: |
@@ -57,17 +63,31 @@ jobs:
           from pathlib import Path
 
           p = Path("buildapp/lib/screens/home_screen.dart")
-          lines = p.read_text(encoding="utf-8").splitlines()
 
-          fixed = []
-          for line in lines:
-              if line.strip() == ")));":
-                  fixed.append(line.replace(")));", "));"))
-              else:
-                  fixed.append(line)
+          if p.exists():
+              lines = p.read_text(
+                  encoding="utf-8"
+              ).splitlines()
 
-          p.write_text("\n".join(fixed) + "\n", encoding="utf-8")
-          print("home_screen.dart fixed")
+              fixed = []
+
+              for line in lines:
+                  if line.strip() == ")));":
+                      fixed.append(
+                          line.replace(
+                              ")));",
+                              "));"
+                          )
+                      )
+                  else:
+                      fixed.append(line)
+
+              p.write_text(
+                  "\n".join(fixed) + "\n",
+                  encoding="utf-8"
+              )
+
+              print("home_screen.dart checked")
           PY
 
       - name: Set Android app name
@@ -75,13 +95,23 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          p = Path("buildapp/android/app/src/main/AndroidManifest.xml")
-          s = p.read_text(encoding="utf-8")
+          p = Path(
+              "buildapp/android/app/src/main/AndroidManifest.xml"
+          )
+
+          s = p.read_text(
+              encoding="utf-8"
+          )
+
           s = s.replace(
               'android:label="shop"',
               'android:label="Liyona"'
           )
-          p.write_text(s, encoding="utf-8")
+
+          p.write_text(
+              s,
+              encoding="utf-8"
+          )
           PY
 
       - name: Install dependencies
@@ -108,11 +138,11 @@ jobs:
         run: |
           cp \
             buildapp/build/app/outputs/flutter-apk/app-release.apk \
-            Liyona-Shop.apk
+            Liyona-Shop-v1.1.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-Shop-APK
-          path: Liyona-Shop.apk
+          name: Liyona-Shop-v1.1-APK
+          path: Liyona-Shop-v1.1.apk
           if-no-files-found: error
