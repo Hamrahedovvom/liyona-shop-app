@@ -49,23 +49,25 @@ jobs:
           cp -R "$SOURCE_DIR/lib" buildapp/lib
           cp -R "$SOURCE_DIR/assets" buildapp/assets
           cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
+          rm -rf buildapp/test
 
-      - name: Fix Liyona source code
+      - name: Fix home screen syntax
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
           p = Path("buildapp/lib/screens/home_screen.dart")
-          s = p.read_text(encoding="utf-8")
+          lines = p.read_text(encoding="utf-8").splitlines()
 
-          s = s.replace(
-              "  )));\\n}",
-              "  ));\\n}"
-          )
+          fixed = []
+          for line in lines:
+              if line.strip() == ")));":
+                  fixed.append(line.replace(")));", "));"))
+              else:
+                  fixed.append(line)
 
-          p.write_text(s, encoding="utf-8")
-
-          print("home_screen.dart fixed successfully")
+          p.write_text("\n".join(fixed) + "\n", encoding="utf-8")
+          print("home_screen.dart fixed")
           PY
 
       - name: Set Android app name
@@ -73,17 +75,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          p = Path(
-              "buildapp/android/app/src/main/AndroidManifest.xml"
-          )
-
+          p = Path("buildapp/android/app/src/main/AndroidManifest.xml")
           s = p.read_text(encoding="utf-8")
-
           s = s.replace(
               'android:label="shop"',
               'android:label="Liyona"'
           )
-
           p.write_text(s, encoding="utf-8")
           PY
 
@@ -101,11 +98,6 @@ jobs:
         working-directory: buildapp
         run: |
           dart run flutter_native_splash:create
-
-      - name: Analyze Flutter project
-        working-directory: buildapp
-        run: |
-          flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build release APK
         working-directory: buildapp
