@@ -29,7 +29,6 @@ jobs:
 
       - name: Check source file
         run: |
-          echo "Files in repository:"
           ls -la
 
           if [ ! -f "liyona-flutter-source-v1.3.zip" ]; then
@@ -48,9 +47,6 @@ jobs:
           SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
 
           echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
-
-          echo "Source directory:"
-          echo "$SOURCE_DIR"
 
       - name: Create Android project
         run: |
@@ -78,20 +74,12 @@ jobs:
           p = Path("buildapp/lib/screens/home_screen.dart")
 
           if p.exists():
-              lines = p.read_text(
-                  encoding="utf-8"
-              ).splitlines()
-
+              lines = p.read_text(encoding="utf-8").splitlines()
               fixed = []
 
               for line in lines:
                   if line.strip() == ")));":
-                      fixed.append(
-                          line.replace(
-                              ")));",
-                              "));"
-                          )
-                      )
+                      fixed.append(line.replace(")));", "));"))
                   else:
                       fixed.append(line)
 
@@ -99,8 +87,6 @@ jobs:
                   "\n".join(fixed) + "\n",
                   encoding="utf-8"
               )
-
-              print("home_screen.dart fixed")
           PY
 
       - name: Configure Android
@@ -112,23 +98,20 @@ jobs:
               "buildapp/android/app/src/main/AndroidManifest.xml"
           )
 
-          text = manifest.read_text(
-              encoding="utf-8"
-          )
+          text = manifest.read_text(encoding="utf-8")
 
           if "android.permission.INTERNET" not in text:
+              pos = text.find(">")
 
-              position = text.find(">")
-
-              permissions = """
-    <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-"""
+              permissions = (
+                  '\n    <uses-permission android:name="android.permission.INTERNET"/>'
+                  '\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>'
+              )
 
               text = (
-                  text[:position + 1]
+                  text[:pos + 1]
                   + permissions
-                  + text[position + 1:]
+                  + text[pos + 1:]
               )
 
           text = text.replace(
@@ -140,8 +123,6 @@ jobs:
               text,
               encoding="utf-8"
           )
-
-          print("AndroidManifest configured")
           PY
 
       - name: Install dependencies
