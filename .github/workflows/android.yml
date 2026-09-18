@@ -37,7 +37,11 @@ jobs:
 
       - name: Create fresh Flutter Android project
         run: |
-          flutter create --platforms=android --org com.liyona --project-name shop buildapp
+          flutter create \
+            --platforms=android \
+            --org com.liyona \
+            --project-name shop \
+            buildapp
 
       - name: Copy Liyona app files
         run: |
@@ -46,35 +50,73 @@ jobs:
           cp -R "$SOURCE_DIR/assets" buildapp/assets
           cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
 
+      - name: Fix Liyona source code
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("buildapp/lib/screens/home_screen.dart")
+          s = p.read_text(encoding="utf-8")
+
+          s = s.replace(
+              "  )));\\n}",
+              "  ));\\n}"
+          )
+
+          p.write_text(s, encoding="utf-8")
+
+          print("home_screen.dart fixed successfully")
+          PY
+
       - name: Set Android app name
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("buildapp/android/app/src/main/AndroidManifest.xml")
-          s = p.read_text()
-          s = s.replace('android:label="shop"', 'android:label="Liyona"')
-          p.write_text(s)
+
+          p = Path(
+              "buildapp/android/app/src/main/AndroidManifest.xml"
+          )
+
+          s = p.read_text(encoding="utf-8")
+
+          s = s.replace(
+              'android:label="shop"',
+              'android:label="Liyona"'
+          )
+
+          p.write_text(s, encoding="utf-8")
           PY
 
       - name: Install dependencies
         working-directory: buildapp
-        run: flutter pub get
+        run: |
+          flutter pub get
 
       - name: Generate launcher icon
         working-directory: buildapp
-        run: dart run flutter_launcher_icons
+        run: |
+          dart run flutter_launcher_icons
 
       - name: Generate splash screen
         working-directory: buildapp
-        run: dart run flutter_native_splash:create
+        run: |
+          dart run flutter_native_splash:create
+
+      - name: Analyze Flutter project
+        working-directory: buildapp
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build release APK
         working-directory: buildapp
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release
 
       - name: Prepare APK
         run: |
-          cp buildapp/build/app/outputs/flutter-apk/app-release.apk Liyona-Shop.apk
+          cp \
+            buildapp/build/app/outputs/flutter-apk/app-release.apk \
+            Liyona-Shop.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
