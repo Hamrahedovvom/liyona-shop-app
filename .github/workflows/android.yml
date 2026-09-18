@@ -27,25 +27,12 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Check source file
-        run: |
-          ls -la
-
-          if [ ! -f "liyona-flutter-source-v1.3.zip" ]; then
-            echo "ERROR: liyona-flutter-source-v1.3.zip not found"
-            exit 1
-          fi
-
-      - name: Extract Liyona source
+      - name: Extract source
         run: |
           rm -rf liyona-source buildapp
-
-          unzip -o \
-            liyona-flutter-source-v1.3.zip \
-            -d liyona-source
+          unzip -o liyona-flutter-source-v1.3.zip -d liyona-source
 
           SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
-
           echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
 
       - name: Create Android project
@@ -56,7 +43,7 @@ jobs:
             --project-name shop \
             buildapp
 
-      - name: Copy Liyona files
+      - name: Copy app files
         run: |
           rm -rf buildapp/lib
           rm -rf buildapp/assets
@@ -66,20 +53,40 @@ jobs:
           cp -R "$SOURCE_DIR/assets" buildapp/assets
           cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
 
-      - name: Fix source
+      - name: Fix Flutter compatibility
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          p = Path("buildapp/lib/screens/home_screen.dart")
+          for p in Path("buildapp/lib").rglob("*.dart"):
+              text = p.read_text(encoding="utf-8")
 
-          if p.exists():
-              lines = p.read_text(encoding="utf-8").splitlines()
+              text = text.replace(
+                  "CardThemeData(",
+                  "CardTheme("
+              )
+
+              text = text.replace(
+                  ".withValues(alpha: .65)",
+                  ".withOpacity(.65)"
+              )
+
+              text = text.replace(
+                  ".withValues(alpha: 0.65)",
+                  ".withOpacity(0.65)"
+              )
+
+              lines = text.splitlines()
               fixed = []
 
               for line in lines:
                   if line.strip() == ")));":
-                      fixed.append(line.replace(")));", "));"))
+                      fixed.append(
+                          line.replace(
+                              ")));",
+                              "));"
+                          )
+                      )
                   else:
                       fixed.append(line)
 
@@ -87,6 +94,8 @@ jobs:
                   "\n".join(fixed) + "\n",
                   encoding="utf-8"
               )
+
+          print("Flutter compatibility fixes applied")
           PY
 
       - name: Configure Android
@@ -130,12 +139,12 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Generate app icon
+      - name: Generate icon
         working-directory: buildapp
         run: |
           dart run flutter_launcher_icons
 
-      - name: Generate splash screen
+      - name: Generate splash
         working-directory: buildapp
         run: |
           dart run flutter_native_splash:create
@@ -145,7 +154,7 @@ jobs:
         run: |
           flutter build apk --release
 
-      - name: Rename APK
+      - name: Prepare APK
         run: |
           cp \
             buildapp/build/app/outputs/flutter-apk/app-release.apk \
