@@ -1,0 +1,103 @@
+name: Build Liyona Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: stable
+          cache: true
+
+      - name: Check source
+        run: |
+          test -f liyona-flutter-source-v1.6.zip || \
+          (echo "liyona-flutter-source-v1.6.zip not found" && exit 1)
+
+      - name: Extract source
+        run: |
+          rm -rf liyona-source buildapp
+          unzip -o liyona-flutter-source-v1.6.zip -d liyona-source
+          SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
+          echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
+
+      - name: Create Android project
+        run: |
+          flutter create \
+            --platforms=android \
+            --org com.liyona \
+            --project-name shop \
+            buildapp
+
+      - name: Copy app files
+        run: |
+          rm -rf buildapp/lib buildapp/assets buildapp/test
+          cp -R "$SOURCE_DIR/lib" buildapp/lib
+          cp -R "$SOURCE_DIR/assets" buildapp/assets
+          cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
+
+      - name: Configure Android
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path("buildapp/android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text(encoding="utf-8")
+          if "android.permission.INTERNET" not in text:
+              pos = text.find(">")
+              permissions = (
+                  '\n    <uses-permission android:name="android.permission.INTERNET"/>'
+                  '\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>'
+              )
+              text = text[:pos + 1] + permissions + text[pos + 1:]
+          text = text.replace('android:label="shop"', 'android:label="Liyona"')
+          manifest.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Install dependencies
+        working-directory: buildapp
+        run: flutter pub get
+
+      - name: Analyze source
+        working-directory: buildapp
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Generate icon
+        working-directory: buildapp
+        run: dart run flutter_launcher_icons
+
+      - name: Generate splash
+        working-directory: buildapp
+        run: dart run flutter_native_splash:create
+
+      - name: Build APK
+        working-directory: buildapp
+        run: flutter build apk --release
+
+      - name: Prepare APK
+        run: |
+          cp buildapp/build/app/outputs/flutter-apk/app-release.apk Liyona-Shop-v1.6.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Liyona-Shop-v1.6-APK
+          path: Liyona-Shop-v1.6.apk
+          if-no-files-found: error
