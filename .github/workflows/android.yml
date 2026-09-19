@@ -29,15 +29,15 @@ jobs:
 
       - name: Check source
         run: |
-          test -f liyona-flutter-source-v1.6.zip || \
-          (echo "ERROR: liyona-flutter-source-v1.6.zip not found" && exit 1)
+          test -f liyona-flutter-source-v1.6-fixed.zip || \
+          (echo "ERROR: liyona-flutter-source-v1.6-fixed.zip not found" && exit 1)
 
       - name: Extract source
         run: |
           rm -rf liyona-source buildapp
 
           unzip -o \
-            liyona-flutter-source-v1.6.zip \
+            liyona-flutter-source-v1.6-fixed.zip \
             -d liyona-source
 
           SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
@@ -116,7 +116,7 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Format check
+      - name: Format source
         working-directory: buildapp
         run: |
           dart format lib
@@ -145,11 +145,11 @@ jobs:
         run: |
           cp \
             buildapp/build/app/outputs/flutter-apk/app-release.apk \
-            Liyona-Shop-v1.6.apk
+            Liyona-Shop-v1.6-fixed.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-Shop-v1.6-APK
-          path: Liyona-Shop-v1.6.apk
+          name: Liyona-Shop-v1.6-fixed-APK
+          path: Liyona-Shop-v1.6-fixed.apk
           if-no-files-found: error
