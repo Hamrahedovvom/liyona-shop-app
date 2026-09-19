@@ -27,12 +27,21 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Check source file
+        run: |
+          ls -la
+
+          if [ ! -f "liyona-flutter-source-v1.4.1.zip" ]; then
+            echo "ERROR: liyona-flutter-source-v1.4.1.zip not found"
+            exit 1
+          fi
+
       - name: Extract source
         run: |
           rm -rf liyona-source buildapp
 
           unzip -o \
-            liyona-flutter-source-v1.4.zip \
+            liyona-flutter-source-v1.4.1.zip \
             -d liyona-source
 
           SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
@@ -100,17 +109,17 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Generate icon
+      - name: Generate app icon
         working-directory: buildapp
         run: |
           dart run flutter_launcher_icons
 
-      - name: Generate splash
+      - name: Generate splash screen
         working-directory: buildapp
         run: |
           dart run flutter_native_splash:create
 
-      - name: Build APK
+      - name: Build release APK
         working-directory: buildapp
         run: |
           flutter build apk --release
@@ -119,11 +128,11 @@ jobs:
         run: |
           cp \
             buildapp/build/app/outputs/flutter-apk/app-release.apk \
-            Liyona-Shop-v1.4.apk
+            Liyona-Shop-v1.4.1.apk
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-Shop-v1.4-APK
-          path: Liyona-Shop-v1.4.apk
+          name: Liyona-Shop-v1.4.1-APK
+          path: Liyona-Shop-v1.4.1.apk
           if-no-files-found: error
