@@ -8,14 +8,14 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -27,24 +27,21 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Show repository files
-        run: |
-          echo "Repository files:"
-          find . -maxdepth 2 -type f | sort
-
       - name: Check source ZIP
+        shell: bash
         run: |
+          echo "Checking repository files..."
+          ls -lah
+
           if [ ! -f "liyona-flutter-source-v1.7.zip" ]; then
             echo "ERROR: liyona-flutter-source-v1.7.zip not found"
-            echo ""
-            echo "Files in repository root:"
-            ls -lah
             exit 1
           fi
 
-          echo "Source ZIP found successfully."
+          echo "Source ZIP found."
 
-      - name: Extract Liyona source
+      - name: Extract source
+        shell: bash
         run: |
           rm -rf liyona-source
           rm -rf buildapp
@@ -55,10 +52,7 @@ jobs:
             liyona-flutter-source-v1.7.zip \
             -d liyona-source
 
-          echo "Extracted files:"
-          find liyona-source -maxdepth 3 -type f | head -100
-
-          PUBSPEC=$(find liyona-source -name pubspec.yaml -type f | head -n 1)
+          PUBSPEC=$(find liyona-source -name pubspec.yaml | head -n 1)
 
           if [ -z "$PUBSPEC" ]; then
             echo "ERROR: pubspec.yaml not found inside ZIP"
@@ -67,20 +61,20 @@ jobs:
 
           SOURCE_DIR=$(dirname "$PUBSPEC")
 
-          echo "Flutter source directory:"
-          echo "$SOURCE_DIR"
-
           echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
+          echo "Flutter source: $SOURCE_DIR"
 
-      - name: Create clean Flutter Android project
+      - name: Create clean Flutter project
+        shell: bash
         run: |
           flutter create \
             --platforms=android \
             --org com.liyona \
-            --project-name liyona \
+            --project-name shop \
             buildapp
 
       - name: Copy Liyona source
+        shell: bash
         run: |
           rm -rf buildapp/lib
           rm -rf buildapp/assets
@@ -92,15 +86,13 @@ jobs:
             cp -R "$SOURCE_DIR/assets" buildapp/assets
           fi
 
-          cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
+          cp "$SOURCE_DIR/pubspec.yaml" \
+             buildapp/pubspec.yaml
 
-          if [ -f "$SOURCE_DIR/pubspec.lock" ]; then
-            cp "$SOURCE_DIR/pubspec.lock" buildapp/pubspec.lock
-          fi
+          echo "Files copied successfully."
 
-          echo "Source copied successfully."
-
-      - name: Configure Android manifest
+      - name: Configure Android
+        shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -111,33 +103,19 @@ jobs:
 
           text = manifest.read_text(encoding="utf-8")
 
-          permissions = [
-              "android.permission.INTERNET",
-              "android.permission.ACCESS_NETWORK_STATE",
-          ]
+          if "android.permission.INTERNET" not in text:
+              pos = text.find(">")
 
-          pos = text.find(">")
+              permissions = """
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+              """
 
-          additions = ""
-
-          for permission in permissions:
-              if permission not in text:
-                  additions += (
-                      '\n    <uses-permission '
-                      f'android:name="{permission}"/>'
-                  )
-
-          if additions:
               text = (
                   text[:pos + 1]
-                  + additions
+                  + permissions
                   + text[pos + 1:]
               )
-
-          text = text.replace(
-              'android:label="liyona"',
-              'android:label="Liyona"'
-          )
 
           text = text.replace(
               'android:label="shop"',
@@ -153,27 +131,32 @@ jobs:
           PY
 
       - name: Flutter version
+        shell: bash
         run: |
           flutter --version
           dart --version
 
       - name: Install dependencies
         working-directory: buildapp
-        run: |
-          flutter pub get
+        run: flutter pub get
 
-      - name: Format check
+      - name: Format Dart source
         working-directory: buildapp
+        shell: bash
         run: |
           dart format lib
 
       - name: Flutter analyze
         working-directory: buildapp
+        shell: bash
         run: |
-          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter analyze \
+            --no-fatal-infos \
+            --no-fatal-warnings
 
       - name: Generate app icon
         working-directory: buildapp
+        shell: bash
         run: |
           if grep -q "flutter_launcher_icons" pubspec.yaml; then
             dart run flutter_launcher_icons
@@ -183,6 +166,7 @@ jobs:
 
       - name: Generate splash screen
         working-directory: buildapp
+        shell: bash
         run: |
           if grep -q "flutter_native_splash" pubspec.yaml; then
             dart run flutter_native_splash:create
@@ -190,20 +174,22 @@ jobs:
             echo "flutter_native_splash not configured - skipping"
           fi
 
-      - name: Clean before release build
+      - name: Clean before build
         working-directory: buildapp
+        shell: bash
         run: |
           flutter clean
           flutter pub get
 
       - name: Build release APK
         working-directory: buildapp
+        shell: bash
         run: |
           flutter build apk \
-            --release \
-            --no-tree-shake-icons
+            --release
 
       - name: Verify APK
+        shell: bash
         run: |
           APK="buildapp/build/app/outputs/flutter-apk/app-release.apk"
 
@@ -216,6 +202,7 @@ jobs:
           ls -lh "$APK"
 
       - name: Prepare APK
+        shell: bash
         run: |
           cp \
             buildapp/build/app/outputs/flutter-apk/app-release.apk \
