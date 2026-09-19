@@ -1,121 +1,164 @@
-name: Build Liyona Android APK
+name: Build Liyona Android v1.8
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'
+          flutter-version: "3.24.5"
           channel: stable
           cache: true
 
-      - name: Check source
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Check source file
+        shell: bash
         run: |
-          ls -lah
-          test -f liyona-flutter-source-v1.7.zip
+          set -e
 
-      - name: Extract source
-        run: |
-          rm -rf liyona-source
-          rm -rf buildapp
-          mkdir -p liyona-source
-          unzip -o liyona-flutter-source-v1.7.zip -d liyona-source
-          PUBSPEC=$(find liyona-source -name pubspec.yaml -type f | head -n 1)
-          test -n "$PUBSPEC"
-          SOURCE_DIR=$(dirname "$PUBSPEC")
-          echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
-          echo "Source directory: $SOURCE_DIR"
+          SOURCE="liyona-flutter-source-v1.8.zip"
 
-      - name: Create Flutter Android project
-        run: |
-          flutter create \
-            --platforms=android \
-            --org com.liyona \
-            --project-name shop \
-            buildapp
-
-      - name: Copy source
-        run: |
-          rm -rf buildapp/lib
-          rm -rf buildapp/assets
-          rm -rf buildapp/test
-
-          cp -R "$SOURCE_DIR/lib" buildapp/lib
-          cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
-
-          if [ -d "$SOURCE_DIR/assets" ]; then
-            cp -R "$SOURCE_DIR/assets" buildapp/assets
+          if [ ! -f "$SOURCE" ]; then
+            echo "ERROR: $SOURCE not found in repository root."
+            echo ""
+            echo "Files in repository:"
+            ls -lah
+            exit 1
           fi
 
-      - name: Add Android permissions
+          echo "Source found:"
+          ls -lh "$SOURCE"
+
+      - name: Extract source
+        shell: bash
         run: |
-          MANIFEST="buildapp/android/app/src/main/AndroidManifest.xml"
+          set -e
 
-          sed -i '2i\
-          <uses-permission android:name="android.permission.INTERNET" />\
-          <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' "$MANIFEST"
+          rm -rf liyona_app
+          mkdir -p liyona_app
 
-          sed -i 's/android:label="shop"/android:label="Liyona"/g' "$MANIFEST"
+          unzip -q liyona-flutter-source-v1.8.zip -d liyona_app
 
-          cat "$MANIFEST"
+          echo "Extracted files:"
+          ls -lah liyona_app
 
-      - name: Install dependencies
-        working-directory: buildapp
+      - name: Detect Flutter project
+        id: project
+        shell: bash
+        run: |
+          set -e
+
+          PUBSPEC=$(find liyona_app -name pubspec.yaml -type f | head -n 1)
+
+          if [ -z "$PUBSPEC" ]; then
+            echo "ERROR: pubspec.yaml not found."
+            find liyona_app -maxdepth 3 -type f | head -100
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$PUBSPEC")
+
+          echo "Flutter project: $PROJECT_DIR"
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure Android platform exists
+        shell: bash
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          set -e
+
+          if [ ! -d "android" ]; then
+            echo "Android folder not found. Creating platform files..."
+            flutter create --platforms=android .
+          fi
+
+      - name: Ensure Android Internet permissions
+        shell: bash
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          set -e
+
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          if [ ! -f "$MANIFEST" ]; then
+            echo "ERROR: AndroidManifest.xml not found."
+            exit 1
+          fi
+
+          if ! grep -q "android.permission.INTERNET" "$MANIFEST"; then
+            sed -i '/<manifest/a\
+    <uses-permission android:name="android.permission.INTERNET"/>' "$MANIFEST"
+          fi
+
+          if ! grep -q "android.permission.ACCESS_NETWORK_STATE" "$MANIFEST"; then
+            sed -i '/<manifest/a\
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' "$MANIFEST"
+          fi
+
+          echo "Android permissions:"
+          grep "uses-permission" "$MANIFEST" || true
+
+      - name: Flutter clean
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: flutter clean
+
+      - name: Get dependencies
+        working-directory: ${{ steps.project.outputs.dir }}
         run: flutter pub get
 
       - name: Analyze source
-        working-directory: buildapp
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
-
-      - name: Generate app icon
-        working-directory: buildapp
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
         run: |
-          if grep -q "flutter_launcher_icons" pubspec.yaml; then
-            dart run flutter_launcher_icons
-          else
-            echo "Skipping launcher icons"
-          fi
+          flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Generate splash
-        working-directory: buildapp
-        run: |
-          if grep -q "flutter_native_splash" pubspec.yaml; then
-            dart run flutter_native_splash:create
-          else
-            echo "Skipping splash generation"
-          fi
-
-      - name: Build APK
-        working-directory: buildapp
+      - name: Build release APK
+        working-directory: ${{ steps.project.outputs.dir }}
         run: flutter build apk --release
 
-      - name: Prepare APK
+      - name: Check APK
+        shell: bash
         run: |
-          test -f buildapp/build/app/outputs/flutter-apk/app-release.apk
-          cp buildapp/build/app/outputs/flutter-apk/app-release.apk Liyona-Shop-v1.7.apk
-          ls -lh Liyona-Shop-v1.7.apk
+          set -e
 
-      - name: Upload APK
+          APK="${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          mkdir -p release
+          cp "$APK" release/Liyona-v1.8.apk
+
+          echo "APK successfully generated:"
+          ls -lh release/Liyona-v1.8.apk
+
+      - name: Upload Liyona APK
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-Shop-v1.7-APK
-          path: Liyona-Shop-v1.7.apk
+          name: Liyona-v1.8-APK
+          path: release/Liyona-v1.8.apk
           if-no-files-found: error
+          retention-days: 30
