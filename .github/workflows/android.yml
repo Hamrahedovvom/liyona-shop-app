@@ -29,18 +29,23 @@ jobs:
 
       - name: Check source
         run: |
-          test -f liyona-flutter-source-v1.5.zip || \
-          (echo "liyona-flutter-source-v1.5.zip not found" && exit 1)
+          test -f liyona-flutter-source-v1.6.zip || \
+          (echo "ERROR: liyona-flutter-source-v1.6.zip not found" && exit 1)
 
       - name: Extract source
         run: |
           rm -rf liyona-source buildapp
 
           unzip -o \
-            liyona-flutter-source-v1.5.zip \
+            liyona-flutter-source-v1.6.zip \
             -d liyona-source
 
           SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
+
+          if [ -z "$SOURCE_DIR" ]; then
+            echo "ERROR: pubspec.yaml not found"
+            exit 1
+          fi
 
           echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
 
@@ -59,7 +64,11 @@ jobs:
           rm -rf buildapp/test
 
           cp -R "$SOURCE_DIR/lib" buildapp/lib
-          cp -R "$SOURCE_DIR/assets" buildapp/assets
+
+          if [ -d "$SOURCE_DIR/assets" ]; then
+            cp -R "$SOURCE_DIR/assets" buildapp/assets
+          fi
+
           cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
 
       - name: Configure Android
@@ -79,8 +88,10 @@ jobs:
               pos = text.find(">")
 
               permissions = (
-                  '\n    <uses-permission android:name="android.permission.INTERNET"/>'
-                  '\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>'
+                  '\n    <uses-permission '
+                  'android:name="android.permission.INTERNET"/>'
+                  '\n    <uses-permission '
+                  'android:name="android.permission.ACCESS_NETWORK_STATE"/>'
               )
 
               text = (
@@ -105,7 +116,17 @@ jobs:
         run: |
           flutter pub get
 
-      - name: Generate icon
+      - name: Format check
+        working-directory: buildapp
+        run: |
+          dart format lib
+
+      - name: Analyze source
+        working-directory: buildapp
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Generate app icon
         working-directory: buildapp
         run: |
           dart run flutter_launcher_icons
@@ -115,7 +136,7 @@ jobs:
         run: |
           dart run flutter_native_splash:create
 
-      - name: Build APK
+      - name: Build release APK
         working-directory: buildapp
         run: |
           flutter build apk --release
@@ -124,11 +145,11 @@ jobs:
         run: |
           cp \
             buildapp/build/app/outputs/flutter-apk/app-release.apk \
-            Liyona-Shop-v1.5.apk
+            Liyona-Shop-v1.6.apk
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-Shop-v1.5-APK
-          path: Liyona-Shop-v1.5.apk
+          name: Liyona-Shop-v1.6-APK
+          path: Liyona-Shop-v1.6.apk
           if-no-files-found: error
