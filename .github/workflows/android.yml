@@ -27,37 +27,60 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Check source
+      - name: Show repository files
         run: |
-          test -f liyona-flutter-source-v1.6-fixed.zip || \
-          (echo "ERROR: liyona-flutter-source-v1.6-fixed.zip not found" && exit 1)
+          echo "Repository files:"
+          find . -maxdepth 2 -type f | sort
 
-      - name: Extract source
+      - name: Check source ZIP
         run: |
-          rm -rf liyona-source buildapp
-
-          unzip -o \
-            liyona-flutter-source-v1.6-fixed.zip \
-            -d liyona-source
-
-          SOURCE_DIR=$(dirname "$(find liyona-source -name pubspec.yaml | head -n 1)")
-
-          if [ -z "$SOURCE_DIR" ]; then
-            echo "ERROR: pubspec.yaml not found"
+          if [ ! -f "liyona-flutter-source-v1.7.zip" ]; then
+            echo "ERROR: liyona-flutter-source-v1.7.zip not found"
+            echo ""
+            echo "Files in repository root:"
+            ls -lah
             exit 1
           fi
 
+          echo "Source ZIP found successfully."
+
+      - name: Extract Liyona source
+        run: |
+          rm -rf liyona-source
+          rm -rf buildapp
+
+          mkdir -p liyona-source
+
+          unzip -o \
+            liyona-flutter-source-v1.7.zip \
+            -d liyona-source
+
+          echo "Extracted files:"
+          find liyona-source -maxdepth 3 -type f | head -100
+
+          PUBSPEC=$(find liyona-source -name pubspec.yaml -type f | head -n 1)
+
+          if [ -z "$PUBSPEC" ]; then
+            echo "ERROR: pubspec.yaml not found inside ZIP"
+            exit 1
+          fi
+
+          SOURCE_DIR=$(dirname "$PUBSPEC")
+
+          echo "Flutter source directory:"
+          echo "$SOURCE_DIR"
+
           echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
 
-      - name: Create Android project
+      - name: Create clean Flutter Android project
         run: |
           flutter create \
             --platforms=android \
             --org com.liyona \
-            --project-name shop \
+            --project-name liyona \
             buildapp
 
-      - name: Copy app files
+      - name: Copy Liyona source
         run: |
           rm -rf buildapp/lib
           rm -rf buildapp/assets
@@ -71,7 +94,13 @@ jobs:
 
           cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
 
-      - name: Configure Android
+          if [ -f "$SOURCE_DIR/pubspec.lock" ]; then
+            cp "$SOURCE_DIR/pubspec.lock" buildapp/pubspec.lock
+          fi
+
+          echo "Source copied successfully."
+
+      - name: Configure Android manifest
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -80,25 +109,35 @@ jobs:
               "buildapp/android/app/src/main/AndroidManifest.xml"
           )
 
-          text = manifest.read_text(
-              encoding="utf-8"
-          )
+          text = manifest.read_text(encoding="utf-8")
 
-          if "android.permission.INTERNET" not in text:
-              pos = text.find(">")
+          permissions = [
+              "android.permission.INTERNET",
+              "android.permission.ACCESS_NETWORK_STATE",
+          ]
 
-              permissions = (
-                  '\n    <uses-permission '
-                  'android:name="android.permission.INTERNET"/>'
-                  '\n    <uses-permission '
-                  'android:name="android.permission.ACCESS_NETWORK_STATE"/>'
-              )
+          pos = text.find(">")
 
+          additions = ""
+
+          for permission in permissions:
+              if permission not in text:
+                  additions += (
+                      '\n    <uses-permission '
+                      f'android:name="{permission}"/>'
+                  )
+
+          if additions:
               text = (
                   text[:pos + 1]
-                  + permissions
+                  + additions
                   + text[pos + 1:]
               )
+
+          text = text.replace(
+              'android:label="liyona"',
+              'android:label="Liyona"'
+          )
 
           text = text.replace(
               'android:label="shop"',
@@ -109,19 +148,26 @@ jobs:
               text,
               encoding="utf-8"
           )
+
+          print("AndroidManifest configured.")
           PY
+
+      - name: Flutter version
+        run: |
+          flutter --version
+          dart --version
 
       - name: Install dependencies
         working-directory: buildapp
         run: |
           flutter pub get
 
-      - name: Format source
+      - name: Format check
         working-directory: buildapp
         run: |
           dart format lib
 
-      - name: Analyze source
+      - name: Flutter analyze
         working-directory: buildapp
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -129,27 +175,56 @@ jobs:
       - name: Generate app icon
         working-directory: buildapp
         run: |
-          dart run flutter_launcher_icons
+          if grep -q "flutter_launcher_icons" pubspec.yaml; then
+            dart run flutter_launcher_icons
+          else
+            echo "flutter_launcher_icons not configured - skipping"
+          fi
 
-      - name: Generate splash
+      - name: Generate splash screen
         working-directory: buildapp
         run: |
-          dart run flutter_native_splash:create
+          if grep -q "flutter_native_splash" pubspec.yaml; then
+            dart run flutter_native_splash:create
+          else
+            echo "flutter_native_splash not configured - skipping"
+          fi
+
+      - name: Clean before release build
+        working-directory: buildapp
+        run: |
+          flutter clean
+          flutter pub get
 
       - name: Build release APK
         working-directory: buildapp
         run: |
-          flutter build apk --release
+          flutter build apk \
+            --release \
+            --no-tree-shake-icons
+
+      - name: Verify APK
+        run: |
+          APK="buildapp/build/app/outputs/flutter-apk/app-release.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not generated"
+            exit 1
+          fi
+
+          echo "APK generated successfully:"
+          ls -lh "$APK"
 
       - name: Prepare APK
         run: |
           cp \
             buildapp/build/app/outputs/flutter-apk/app-release.apk \
-            Liyona-Shop-v1.6-fixed.apk
+            Liyona-Shop-v1.7.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-Shop-v1.6-fixed-APK
-          path: Liyona-Shop-v1.6-fixed.apk
+          name: Liyona-Shop-v1.7-APK
+          path: Liyona-Shop-v1.7.apk
           if-no-files-found: error
+          retention-days: 30
