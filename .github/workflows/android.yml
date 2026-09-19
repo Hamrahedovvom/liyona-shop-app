@@ -8,14 +8,14 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
@@ -27,45 +27,24 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Check source ZIP
-        shell: bash
+      - name: Check source
         run: |
-          echo "Checking repository files..."
           ls -lah
-
-          if [ ! -f "liyona-flutter-source-v1.7.zip" ]; then
-            echo "ERROR: liyona-flutter-source-v1.7.zip not found"
-            exit 1
-          fi
-
-          echo "Source ZIP found."
+          test -f liyona-flutter-source-v1.7.zip
 
       - name: Extract source
-        shell: bash
         run: |
           rm -rf liyona-source
           rm -rf buildapp
-
           mkdir -p liyona-source
-
-          unzip -o \
-            liyona-flutter-source-v1.7.zip \
-            -d liyona-source
-
-          PUBSPEC=$(find liyona-source -name pubspec.yaml | head -n 1)
-
-          if [ -z "$PUBSPEC" ]; then
-            echo "ERROR: pubspec.yaml not found inside ZIP"
-            exit 1
-          fi
-
+          unzip -o liyona-flutter-source-v1.7.zip -d liyona-source
+          PUBSPEC=$(find liyona-source -name pubspec.yaml -type f | head -n 1)
+          test -n "$PUBSPEC"
           SOURCE_DIR=$(dirname "$PUBSPEC")
-
           echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
-          echo "Flutter source: $SOURCE_DIR"
+          echo "Source directory: $SOURCE_DIR"
 
-      - name: Create clean Flutter project
-        shell: bash
+      - name: Create Flutter Android project
         run: |
           flutter create \
             --platforms=android \
@@ -73,145 +52,70 @@ jobs:
             --project-name shop \
             buildapp
 
-      - name: Copy Liyona source
-        shell: bash
+      - name: Copy source
         run: |
           rm -rf buildapp/lib
           rm -rf buildapp/assets
           rm -rf buildapp/test
 
           cp -R "$SOURCE_DIR/lib" buildapp/lib
+          cp "$SOURCE_DIR/pubspec.yaml" buildapp/pubspec.yaml
 
           if [ -d "$SOURCE_DIR/assets" ]; then
             cp -R "$SOURCE_DIR/assets" buildapp/assets
           fi
 
-          cp "$SOURCE_DIR/pubspec.yaml" \
-             buildapp/pubspec.yaml
-
-          echo "Files copied successfully."
-
-      - name: Configure Android
-        shell: bash
+      - name: Add Android permissions
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          MANIFEST="buildapp/android/app/src/main/AndroidManifest.xml"
 
-          manifest = Path(
-              "buildapp/android/app/src/main/AndroidManifest.xml"
-          )
+          sed -i '2i\
+          <uses-permission android:name="android.permission.INTERNET" />\
+          <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' "$MANIFEST"
 
-          text = manifest.read_text(encoding="utf-8")
+          sed -i 's/android:label="shop"/android:label="Liyona"/g' "$MANIFEST"
 
-          if "android.permission.INTERNET" not in text:
-              pos = text.find(">")
-
-              permissions = """
-    <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-              """
-
-              text = (
-                  text[:pos + 1]
-                  + permissions
-                  + text[pos + 1:]
-              )
-
-          text = text.replace(
-              'android:label="shop"',
-              'android:label="Liyona"'
-          )
-
-          manifest.write_text(
-              text,
-              encoding="utf-8"
-          )
-
-          print("AndroidManifest configured.")
-          PY
-
-      - name: Flutter version
-        shell: bash
-        run: |
-          flutter --version
-          dart --version
+          cat "$MANIFEST"
 
       - name: Install dependencies
         working-directory: buildapp
         run: flutter pub get
 
-      - name: Format Dart source
+      - name: Analyze source
         working-directory: buildapp
-        shell: bash
-        run: |
-          dart format lib
-
-      - name: Flutter analyze
-        working-directory: buildapp
-        shell: bash
-        run: |
-          flutter analyze \
-            --no-fatal-infos \
-            --no-fatal-warnings
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Generate app icon
         working-directory: buildapp
-        shell: bash
         run: |
           if grep -q "flutter_launcher_icons" pubspec.yaml; then
             dart run flutter_launcher_icons
           else
-            echo "flutter_launcher_icons not configured - skipping"
+            echo "Skipping launcher icons"
           fi
 
-      - name: Generate splash screen
+      - name: Generate splash
         working-directory: buildapp
-        shell: bash
         run: |
           if grep -q "flutter_native_splash" pubspec.yaml; then
             dart run flutter_native_splash:create
           else
-            echo "flutter_native_splash not configured - skipping"
+            echo "Skipping splash generation"
           fi
 
-      - name: Clean before build
+      - name: Build APK
         working-directory: buildapp
-        shell: bash
-        run: |
-          flutter clean
-          flutter pub get
-
-      - name: Build release APK
-        working-directory: buildapp
-        shell: bash
-        run: |
-          flutter build apk \
-            --release
-
-      - name: Verify APK
-        shell: bash
-        run: |
-          APK="buildapp/build/app/outputs/flutter-apk/app-release.apk"
-
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not generated"
-            exit 1
-          fi
-
-          echo "APK generated successfully:"
-          ls -lh "$APK"
+        run: flutter build apk --release
 
       - name: Prepare APK
-        shell: bash
         run: |
-          cp \
-            buildapp/build/app/outputs/flutter-apk/app-release.apk \
-            Liyona-Shop-v1.7.apk
+          test -f buildapp/build/app/outputs/flutter-apk/app-release.apk
+          cp buildapp/build/app/outputs/flutter-apk/app-release.apk Liyona-Shop-v1.7.apk
+          ls -lh Liyona-Shop-v1.7.apk
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Liyona-Shop-v1.7-APK
           path: Liyona-Shop-v1.7.apk
           if-no-files-found: error
-          retention-days: 30
