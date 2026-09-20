@@ -1,4 +1,4 @@
-name: Build Liyona Android v1.9.0
+name: Build Liyona Android v1.9.1
 
 on:
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
         run: |
           set -e
 
-          SOURCE="liyona-flutter-source-v1.9.0.zip"
+          SOURCE="liyona-flutter-source-v1.9.1.zip"
 
           if [ ! -f "$SOURCE" ]; then
             echo "ERROR: $SOURCE not found."
@@ -60,7 +60,7 @@ jobs:
           rm -rf build_source
           mkdir -p build_source
 
-          unzip -q liyona-flutter-source-v1.9.0.zip -d build_source
+          unzip -q liyona-flutter-source-v1.9.1.zip -d build_source
 
           echo "Source extracted successfully."
 
@@ -101,7 +101,7 @@ jobs:
 
           echo "build_android.sh found."
 
-      - name: Build Liyona v1.9.0
+      - name: Build Liyona v1.9.1
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -135,15 +135,15 @@ jobs:
 
           cp \
             "${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk" \
-            "release/Liyona-v1.9.0.apk"
+            "release/Liyona-v1.9.1.apk"
 
           echo "Final APK:"
-          ls -lh release/Liyona-v1.9.0.apk
+          ls -lh release/Liyona-v1.9.1.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-v1.9.0-APK
-          path: release/Liyona-v1.9.0.apk
+          name: Liyona-v1.9.1-APK
+          path: release/Liyona-v1.9.1.apk
           if-no-files-found: error
           retention-days: 30
