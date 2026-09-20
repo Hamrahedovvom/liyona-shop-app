@@ -1,4 +1,4 @@
-name: Build Liyona Android v1.9.2
+name: Build Liyona Android v1.9.2 Fixed
 
 on:
   workflow_dispatch:
@@ -35,28 +35,34 @@ jobs:
       - name: Show Flutter version
         run: flutter --version
 
-      - name: Check source ZIP
+      - name: Check fixed source ZIP
         shell: bash
         run: |
           set -e
-          SOURCE="liyona-flutter-source-v1.9.2.zip"
+
+          SOURCE="liyona-flutter-source-v1.9.2-fixed.zip"
 
           if [ ! -f "$SOURCE" ]; then
             echo "ERROR: $SOURCE not found."
+            echo "Repository files:"
             ls -lah
             exit 1
           fi
 
-          echo "Source ZIP found:"
+          echo "Fixed source ZIP found successfully:"
           ls -lh "$SOURCE"
 
-      - name: Extract source
+      - name: Extract fixed source
         shell: bash
         run: |
           set -e
+
           rm -rf build_source
           mkdir -p build_source
-          unzip -q liyona-flutter-source-v1.9.2.zip -d build_source
+
+          unzip -q liyona-flutter-source-v1.9.2-fixed.zip -d build_source
+
+          echo "Source extracted successfully."
 
       - name: Find Flutter project
         id: project
@@ -68,12 +74,16 @@ jobs:
 
           if [ -z "$PUBSPEC" ]; then
             echo "ERROR: pubspec.yaml not found."
+            echo "Extracted files:"
             find build_source -maxdepth 4 -type f
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$PUBSPEC")
-          echo "Flutter project: $PROJECT_DIR"
+
+          echo "Flutter project found:"
+          echo "$PROJECT_DIR"
+
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Check build script
@@ -90,11 +100,15 @@ jobs:
 
           chmod +x build_android.sh
 
-      - name: Build Liyona v1.9.2
+          echo "build_android.sh found successfully."
+
+      - name: Build Liyona v1.9.2 Fixed
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
           set -e
+
+          echo "Starting Liyona v1.9.2 fixed build..."
           bash build_android.sh
 
       - name: Verify release APK
@@ -107,28 +121,32 @@ jobs:
 
           if [ ! -f "$APK" ]; then
             echo "ERROR: app-release.apk was not generated."
+            echo "Available build files:"
             find build -type f 2>/dev/null || true
             exit 1
           fi
 
+          echo "APK generated successfully:"
           ls -lh "$APK"
 
-      - name: Prepare APK
+      - name: Prepare final APK
         shell: bash
         run: |
           set -e
+
           mkdir -p release
 
           cp \
             "${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk" \
-            "release/Liyona-v1.9.2.apk"
+            "release/Liyona-v1.9.2-fixed.apk"
 
-          ls -lh release/Liyona-v1.9.2.apk
+          echo "Final APK:"
+          ls -lh release/Liyona-v1.9.2-fixed.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-v1.9.2-APK
-          path: release/Liyona-v1.9.2.apk
+          name: Liyona-v1.9.2-Fixed-APK
+          path: release/Liyona-v1.9.2-fixed.apk
           if-no-files-found: error
           retention-days: 30
