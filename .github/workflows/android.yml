@@ -1,4 +1,4 @@
-name: Build Liyona Android v1.9.1
+name: Build Liyona Android v1.9.2
 
 on:
   workflow_dispatch:
@@ -39,30 +39,24 @@ jobs:
         shell: bash
         run: |
           set -e
-
-          SOURCE="liyona-flutter-source-v1.9.1.zip"
+          SOURCE="liyona-flutter-source-v1.9.2.zip"
 
           if [ ! -f "$SOURCE" ]; then
             echo "ERROR: $SOURCE not found."
-            echo "Repository files:"
             ls -lah
             exit 1
           fi
 
-          echo "Source ZIP found successfully:"
+          echo "Source ZIP found:"
           ls -lh "$SOURCE"
 
       - name: Extract source
         shell: bash
         run: |
           set -e
-
           rm -rf build_source
           mkdir -p build_source
-
-          unzip -q liyona-flutter-source-v1.9.1.zip -d build_source
-
-          echo "Source extracted successfully."
+          unzip -q liyona-flutter-source-v1.9.2.zip -d build_source
 
       - name: Find Flutter project
         id: project
@@ -79,10 +73,7 @@ jobs:
           fi
 
           PROJECT_DIR=$(dirname "$PUBSPEC")
-
-          echo "Flutter project found:"
-          echo "$PROJECT_DIR"
-
+          echo "Flutter project: $PROJECT_DIR"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Check build script
@@ -99,9 +90,7 @@ jobs:
 
           chmod +x build_android.sh
 
-          echo "build_android.sh found."
-
-      - name: Build Liyona v1.9.1
+      - name: Build Liyona v1.9.2
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -118,32 +107,28 @@ jobs:
 
           if [ ! -f "$APK" ]; then
             echo "ERROR: app-release.apk was not generated."
-            echo "Build files:"
             find build -type f 2>/dev/null || true
             exit 1
           fi
 
-          echo "APK generated successfully:"
           ls -lh "$APK"
 
       - name: Prepare APK
         shell: bash
         run: |
           set -e
-
           mkdir -p release
 
           cp \
             "${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk" \
-            "release/Liyona-v1.9.1.apk"
+            "release/Liyona-v1.9.2.apk"
 
-          echo "Final APK:"
-          ls -lh release/Liyona-v1.9.1.apk
+          ls -lh release/Liyona-v1.9.2.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-v1.9.1-APK
-          path: release/Liyona-v1.9.1.apk
+          name: Liyona-v1.9.2-APK
+          path: release/Liyona-v1.9.2.apk
           if-no-files-found: error
           retention-days: 30
