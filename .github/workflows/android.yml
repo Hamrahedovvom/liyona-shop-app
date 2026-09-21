@@ -1,4 +1,4 @@
-name: Build Liyona Android v1.9.2 Fixed
+name: Build Liyona Android v1.10.0
 
 on:
   workflow_dispatch:
@@ -35,12 +35,12 @@ jobs:
       - name: Show Flutter version
         run: flutter --version
 
-      - name: Check fixed source ZIP
+      - name: Check source ZIP
         shell: bash
         run: |
           set -e
 
-          SOURCE="liyona-flutter-source-v1.9.2-fixed.zip"
+          SOURCE="liyona-flutter-source-v1.10.0.zip"
 
           if [ ! -f "$SOURCE" ]; then
             echo "ERROR: $SOURCE not found."
@@ -49,10 +49,10 @@ jobs:
             exit 1
           fi
 
-          echo "Fixed source ZIP found successfully:"
+          echo "Source ZIP found:"
           ls -lh "$SOURCE"
 
-      - name: Extract fixed source
+      - name: Extract source
         shell: bash
         run: |
           set -e
@@ -60,7 +60,7 @@ jobs:
           rm -rf build_source
           mkdir -p build_source
 
-          unzip -q liyona-flutter-source-v1.9.2-fixed.zip -d build_source
+          unzip -q liyona-flutter-source-v1.10.0.zip -d build_source
 
           echo "Source extracted successfully."
 
@@ -100,15 +100,15 @@ jobs:
 
           chmod +x build_android.sh
 
-          echo "build_android.sh found successfully."
+          echo "build_android.sh found."
 
-      - name: Build Liyona v1.9.2 Fixed
+      - name: Build Liyona v1.10.0
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
           set -e
 
-          echo "Starting Liyona v1.9.2 fixed build..."
+          echo "Starting Liyona v1.10.0 build..."
           bash build_android.sh
 
       - name: Verify release APK
@@ -138,15 +138,15 @@ jobs:
 
           cp \
             "${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk" \
-            "release/Liyona-v1.9.2-fixed.apk"
+            "release/Liyona-v1.10.0.apk"
 
           echo "Final APK:"
-          ls -lh release/Liyona-v1.9.2-fixed.apk
+          ls -lh release/Liyona-v1.10.0.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Liyona-v1.9.2-Fixed-APK
-          path: release/Liyona-v1.9.2-fixed.apk
+          name: Liyona-v1.10.0-APK
+          path: release/Liyona-v1.10.0.apk
           if-no-files-found: error
           retention-days: 30
